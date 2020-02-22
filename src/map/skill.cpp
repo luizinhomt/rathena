@@ -9688,20 +9688,28 @@ int skill_castend_nodamage_id (struct block_list *src, struct block_list *bl, ui
 		break;
 
 	case WL_READING_SB:
-		if( sd ) {
+		if (sd) {
 			struct status_change *sc = status_get_sc(bl);
 
-			for( i = SC_SPELLBOOK1; i <= SC_MAXSPELLBOOK; i++)
-				if( sc && !sc->data[i] )
-					break;
-			if( i == SC_MAXSPELLBOOK ) {
-				clif_skill_fail(sd, WL_READING_SB, USESKILL_FAIL_SPELLBOOK_READING, 0);
-				break;
-			}
+			if (sd->state.autopilotmode == 0) {
 
-			sc_start(src,bl, SC_STOP, 100, skill_lv, INFINITE_TICK); //Can't move while selecting a spellbook.
-			clif_spellbook_list(sd);
-			clif_skill_nodamage(src, bl, skill_id, skill_lv, 1);
+				for (i = SC_SPELLBOOK1; i <= SC_MAXSPELLBOOK; i++)
+					if (sc && !sc->data[i])
+						break;
+				if (i == SC_MAXSPELLBOOK) {
+					clif_skill_fail(sd, WL_READING_SB, USESKILL_FAIL_SPELLBOOK_READING, 0);
+					break;
+				}
+
+				sc_start(src, bl, SC_STOP, 100, skill_lv, INFINITE_TICK); //Can't move while selecting a spellbook.
+				clif_spellbook_list(sd);
+				clif_skill_nodamage(src, bl, skill_id, skill_lv, 1);
+			}
+			else {
+				if (pc_inventory_count(sd, 6195) >= 1)
+					skill_spellbook(sd, 6195);
+			};
+
 		}
 		break;
 
