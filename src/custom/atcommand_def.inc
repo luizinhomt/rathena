@@ -13,5 +13,7 @@
 ACMD_DEF(autopilot),
 ACMD_DEF(autopilotsp),
 ACMD_DEF(autosong),
+ACMD_DEF(autosong2),
+ACMD_DEF(autosong3),
 ACMD_DEF(autoconc),
 ACMD_DEF(autopilothom),
