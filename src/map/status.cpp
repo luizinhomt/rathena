@@ -9270,7 +9270,6 @@ int status_change_start(struct block_list* src, struct block_list* bl,enum sc_ty
 		if (type != SC_HARMONIZE) status_change_end(bl, SC_HARMONIZE, INVALID_TIMER);
 		break;
 	case SC_VOICEOFSIREN:
-	case SC_DEEPSLEEP:
 	case SC_GLOOMYDAY:
 	case SC_SONGOFMANA:
 	case SC_DANCEWITHWUG:
@@ -9281,7 +9280,6 @@ int status_change_start(struct block_list* src, struct block_list* bl,enum sc_ty
 	case SC_UNLIMITEDHUMMINGVOICE:
 	case SC_SIRCLEOFNATURE: // Group B
 		if (type != SC_VOICEOFSIREN) status_change_end(bl, SC_VOICEOFSIREN, INVALID_TIMER);
-		if (type != SC_DEEPSLEEP) status_change_end(bl, SC_DEEPSLEEP, INVALID_TIMER);
 		if (type != SC_LERADSDEW) status_change_end(bl, SC_LERADSDEW, INVALID_TIMER);
 		if (type != SC_MELODYOFSINK) status_change_end(bl, SC_MELODYOFSINK, INVALID_TIMER);
 		if (type != SC_BEYONDOFWARCRY) status_change_end(bl, SC_BEYONDOFWARCRY, INVALID_TIMER);
