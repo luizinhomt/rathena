@@ -308,6 +308,14 @@ struct map_session_data {
 		bool asurapreparation;
 		unsigned int autospgoal;
 		unsigned int autosong;
+		unsigned int autosong2;
+		unsigned int autosong3;
+		unsigned int autoelemtype;
+		unsigned int autoelemlevel;
+		unsigned int autoelemmode;
+		unsigned int autoelemreqitem;
+		unsigned int autoelemreqitemnum;
+		int autopilotdist = 0;
 		unsigned disable_atcommand_on_npc : 1; //Prevent to use atcommand while talking with NPC [Kichi]
 		uint8 isBoundTrading; // Player is currently add bound item to trade list [Cydh]
 		bool ignoretimeout; // Prevent the SECURE_NPCTIMEOUT function from closing current script.
