@@ -3776,7 +3776,7 @@ int targetkaute(block_list * bl, va_list ap)
 
 	if (pc_isdead(sd)) return 0;
 	// Must be self or soul unity 
-	if (!(sd->sc.data[SC_SOULUNITY]) && (sd->bl.id!=sd2->bl.id)) return 0;
+	if ((!(sd->sc.data[SC_SOULUNITY])) && (sd->bl.id!=sd2->bl.id)) return 0;
 	if (sd->sc.data[SC_NORECOVER_STATE]) return 0;
 	// Must recover at least 20% SP
 	if (sd->battle_status.sp > 0.8*sd->battle_status.max_sp) return 0;
@@ -3809,7 +3809,7 @@ int targetsoulbuff(block_list * bl, va_list ap)
 	// If you did not, you'll have to add a condition for that here and/or on the soul links themselves
 	// depending on which do you want the AI to avoid using in favor of the other.
 
-	int thisprio, bestprio = 0;
+	int thisprio = 0, bestprio = 0;
 	if (pc_checkskill(sd2, SP_SOULGOLEM) > 0) {
 		// Support mode wants the defense
 		if (sd->state.autopilotmode == 3) thisprio = 10* pc_checkskill(sd2, SP_SOULGOLEM);
@@ -3842,6 +3842,7 @@ int targetsoulbuff(block_list * bl, va_list ap)
 	if (pc_checkskill(sd2, SP_SOULSHADOW) > 0) {
 		// ATK chars prefer this
 		if (sd->state.shadowwant) thisprio = 12 * pc_checkskill(sd2, SP_SOULSHADOW);
+		else
 		if (pc_rightside_atk(sd) > pc_rightside_matk(sd)) thisprio = 5 * pc_checkskill(sd2, SP_SOULSHADOW);
 		else thisprio = 1 * pc_checkskill(sd2, SP_SOULSHADOW);
 	}
@@ -4033,7 +4034,7 @@ int targetstellarmark(block_list * bl, va_list ap)
 	nullpo_ret(md = (struct mob_data *)bl);
 
 	// Mark each enemy at most once
-	if (sd->sc.data[SC_FLASHKICK]) return 0;
+	if (md->sc.data[SC_FLASHKICK]) return 0;
 
 	sd2 = va_arg(ap, struct map_session_data *); // the player autopiloting
 	// This is a melee skill with a range of 1 only
@@ -4043,11 +4044,11 @@ int targetstellarmark(block_list * bl, va_list ap)
 	return 1;
 }
 
-int hatmobid[100];
-int hatmobcount[100];
+int hatmobid[1000];
+int hatmobcount[1000];
 int nofhatmobs;
-int hatmobsize[100];
-int hatmobhp[100];
+int hatmobsize[1000];
+int hatmobhp[1000];
 
 void resetmobsforhatred()
 {
@@ -4068,8 +4069,8 @@ int mobsforhatred(block_list * bl, va_list ap)
 	else {
 		hatmobcount[nofhatmobs] = 1;
 		hatmobid[nofhatmobs] = md->mob_id;
-		hatmobhp[nofhatmobs] = md->base_status->max_hp;
-		hatmobsize[nofhatmobs] = md->base_status->size;
+		hatmobhp[nofhatmobs] = md->status.max_hp;
+		hatmobsize[nofhatmobs] = md->status.size;
 		nofhatmobs++;
 	}
 	return 0;
@@ -5983,9 +5984,9 @@ int PREFERSUN = 1;
 int emperormode(map_session_data * sd)
 {
 	// High ASPD wants to use STAR
-	int starprio = 500 - sd->battle_status.amotion;
-	int moonprio = (1000 - (skill_castfix(&sd->bl, SJ_NEWMOONKICK, 7))) / 2;
-	int sunprio = (1000 - (skill_delayfix(&sd->bl, SJ_PROMINENCEKICK, 7))) / 2;
+	int starprio = 502 - sd->battle_status.amotion;
+	int moonprio = (1002 - (skill_castfix(&sd->bl, SJ_NEWMOONKICK, 7))) / 2;
+	int sunprio = (1002 - (skill_delayfix(&sd->bl, SJ_PROMINENCEKICK, 7))) / 2;
 	if (pc_checkskill(sd, SJ_PROMINENCEKICK) < 1) sunprio = 0;
 	sunprio = sunprio * pc_checkskill(sd, SJ_SOLARBURST);
 	if (pc_checkskill(sd, SJ_NEWMOONKICK) < 1) moonprio = 0;
@@ -6051,12 +6052,12 @@ int ammochange(map_session_data * sd, mob_data *targetmd)
 	else {
 		char* msg = "I have no bullets to shoot my target!";
 		saythis(sd, msg, 50);
-		return 0;
+		return -1;
 	}
 
 }
 
-int kunaichange(map_session_data * sd, mob_data *targetmd)
+int kunaichange(map_session_data * sd, mob_data *targetmd, int rqamount)
 {
 	unsigned short arrows[] = {
 		13255,13256,13257,13258,13259,13294
@@ -6074,9 +6075,10 @@ int kunaichange(map_session_data * sd, mob_data *targetmd)
 	int i, j;
 	int best = -1; int bestprio = -1;
 	bool eqp = false; int bestelem = -1;
-
+	
 	for (i = 0; i < ARRAYLENGTH(arrows); i++) {
-		if ((index = pc_search_inventory(sd, arrows[i])) >= 0) {
+		if ((index = pc_search_inventory(sd, arrows[i])) >= 0)
+		if (pc_inventory_count(sd, arrows[i]) >=rqamount ) {
 			j = arrowatk[i];
 			if (elemstrong(targetmd, arrowelem[i])) j += 500;
 			if (elemallowed(targetmd, arrowelem[i])) if (j > bestprio)
@@ -6094,7 +6096,7 @@ int kunaichange(map_session_data * sd, mob_data *targetmd)
 	else {
 		char* msg = "I have no kunai left to throw!";
 		saythis(sd, msg, 50);
-		return 0;
+		return -1;
 	}
 
 }
@@ -6277,14 +6279,14 @@ void skillwhenidle(struct map_session_data *sd) {
 	// Warmer - also heals mobs so only use when idle
 	if (canskill(sd)) if (pc_checkskill(sd, SO_WARMER) > 0) {
 		if ((map_foreachinrange(AOEPriority, &sd->bl, 20, BL_MOB) <= 0) && (map_foreachinrange(WarmerPriority, &sd->bl, 9, BL_PC) >= 50 * partycount)) {
-			unit_skilluse_ifable(&sd->bl, sd->bl.id, SO_WARMER, pc_checkskill(sd, SO_WARMER));
+			unit_skilluse_ifablexy(&sd->bl, sd->bl.id, SO_WARMER, pc_checkskill(sd, SO_WARMER));
 		}
 	}
 
 	// Pure Soul
 	if ((sd->battle_status.sp<200) ||
 		(sd->battle_status.hp < 0.5* sd->battle_status.max_hp) ||
-		(sd->battle_status.hp < 0.5* sd->battle_status.max_hp))
+		(sd->battle_status.sp < 0.5* sd->battle_status.max_sp))
 		if (canskill(sd))
 			if ((pc_checkskill(sd, KO_MEIKYOUSISUI) > 0)) {
 				if (!(sd->sc.data[SC_MEIKYOUSISUI])) {
@@ -6502,7 +6504,10 @@ void skillwhenidle(struct map_session_data *sd) {
 	// Auto Shadow Spell
 	if (canskill(sd))
 		if (pc_checkskill(sd, SC_AUTOSHADOWSPELL) > 0) {
-			if (!(sd->sc.data[SC__AUTOSHADOWSPELL])) {
+			if (!(sd->sc.data[SC__AUTOSHADOWSPELL]))
+				if ((sd->reproduceskill_idx > 0 && sd->status.skill[sd->reproduceskill_idx].id) ||
+					(sd->cloneskill_idx > 0 && sd->status.skill[sd->cloneskill_idx].id))
+				{
 				unit_skilluse_ifable(&sd->bl, SELF, SC_AUTOSHADOWSPELL, pc_checkskill(sd, SC_AUTOSHADOWSPELL));
 			}
 		}
@@ -6718,9 +6723,6 @@ void skillwhenidle(struct map_session_data *sd) {
 			if (sd->battle_status.sp >= 0.9*sd->battle_status.max_sp)
 				unit_skilluse_ifable(&sd->bl, SELF, AB_ANCILLA, pc_checkskill(sd, AB_ANCILLA));
 	
-	// Turn off Gatling Fever if stopped fighting
-	if (pc_checkskill(sd, GS_GATLINGFEVER) > 0) if (sd->sc.data[SC_GATLINGFEVER]) unit_skilluse_ifable(&sd->bl, SELF, GS_GATLINGFEVER, pc_checkskill(sd, GS_GATLINGFEVER));
-
 	return;
 }
 
@@ -7213,7 +7215,7 @@ TIMER_FUNC(unit_autopilot_timer)
 	party_id = sd->status.party_id;
 	p = party_search(party_id);
 
-	if (p) partycount = p->party.count +1;
+	if (p) partycount = max (1,p->party.count);
 
 	if (p) //Search leader
 		for (i = 0; i < MAX_PARTY && !p->party.member[i].leader; i++);
@@ -7683,29 +7685,33 @@ TIMER_FUNC(unit_autopilot_timer)
 		}
 
 		// Star Emperor, select preferred stance/ skillset
+		// ****Note I have disabled the day checking on these skills (odd/even, divisible by 5 etc)
+		// If you did not, you'll need to rewrite/adjust it to use the correct type of skill(s)
 		int prefer = 0;
-		if (sd->class_ == MAPID_STAR_EMPEROR) {
+		if ((sd->class_ & MAPID_THIRDMASK )== MAPID_STAR_EMPEROR) {
 			prefer = emperormode(sd);
 
 			// 1. Activate Stance
 			if (canskill(sd))
-				if ((!sd->sc.data[SC_LUNARSTANCE])
-					&& (!sd->sc.data[SC_UNIVERSESTANCE])
-					&& (!sd->sc.data[SC_SUNSTANCE])
-					&& (!sd->sc.data[SC_STARSTANCE])
-					) {
-					if ((pc_checkskill(sd, SJ_UNIVERSESTANCE) > 0))
-						unit_skilluse_ifable(&sd->bl, SELF, SJ_UNIVERSESTANCE, pc_checkskill(sd, SJ_UNIVERSESTANCE));
+				if ((pc_checkskill(sd, SJ_UNIVERSESTANCE) > 0))
+						if (!sd->sc.data[SC_UNIVERSESTANCE])
+							unit_skilluse_ifable(&sd->bl, SELF, SJ_UNIVERSESTANCE, pc_checkskill(sd, SJ_UNIVERSESTANCE));
 					if (canskill(sd))
 						if ((pc_checkskill(sd, SJ_SUNSTANCE) > 0) && (prefer == PREFERSUN))
+							if (!sd->sc.data[SC_SUNSTANCE])
+								if (!sd->sc.data[SC_UNIVERSESTANCE])
 							unit_skilluse_ifable(&sd->bl, SELF, SJ_SUNSTANCE, pc_checkskill(sd, SJ_SUNSTANCE));
 					if (canskill(sd))
 						if ((pc_checkskill(sd, SJ_LUNARSTANCE) > 0) && (prefer == PREFERMOON))
-							unit_skilluse_ifable(&sd->bl, SELF, SJ_LUNARSTANCE, pc_checkskill(sd, SJ_LUNARSTANCE));
+							if (!sd->sc.data[SC_UNIVERSESTANCE])
+								if (!sd->sc.data[SC_LUNARSTANCE])
+								unit_skilluse_ifable(&sd->bl, SELF, SJ_LUNARSTANCE, pc_checkskill(sd, SJ_LUNARSTANCE));
 					if (canskill(sd))
 						if ((pc_checkskill(sd, SJ_STARSTANCE) > 0) && (prefer == PREFERSTAR))
-							unit_skilluse_ifable(&sd->bl, SELF, SJ_STARSTANCE, pc_checkskill(sd, SJ_STARSTANCE));
-				}
+							if (!sd->sc.data[SC_UNIVERSESTANCE])
+								if (!sd->sc.data[SC_STARSTANCE])
+								unit_skilluse_ifable(&sd->bl, SELF, SJ_STARSTANCE, pc_checkskill(sd, SJ_STARSTANCE));
+				
 
 			// 2. Activate Light
 			if (canskill(sd))
@@ -7759,9 +7765,10 @@ TIMER_FUNC(unit_autopilot_timer)
 						sd->state.chosenfeel = 0;
 
 						resetmobsforhatred();
-						map_foreachinmap(mobsforhatred, sd->mapindex, BL_MOB, sd);
+						map_foreachinmap(mobsforhatred, sd->bl.m, BL_MOB, sd);
 
 						if (nofhatmobs > 0) {
+							sd->state.autofeelhate = 2;
 							// Pick the best feel available
 							int suntotal = pc_checkskill(sd, SG_SUN_WARM) + pc_checkskill(sd, SG_SUN_COMFORT);
 							int moontotal = pc_checkskill(sd, SG_MOON_WARM) + pc_checkskill(sd, SG_MOON_COMFORT);
@@ -7771,13 +7778,13 @@ TIMER_FUNC(unit_autopilot_timer)
 								sd->state.chosenfeel = 1;
 							if ((moontotal > 0) && (moontotal >= suntotal) && (moontotal > startotal))
 								sd->state.chosenfeel = 2;
-							if ((startotal > 0) && (startotal >= moontotal) && (suntotal <= startotal))
+							if ((startotal >= 0) && (startotal >= moontotal) && (suntotal <= startotal))
 								sd->state.chosenfeel = 3;
 							// Stellar hate
 							int i=0;
 							int best = 0;
 							while (i < nofhatmobs) {
-								if (hatmobsize[i]=SZ_BIG)
+								if (hatmobsize[i]==SZ_BIG)
 									if (hatmobhp[i]>=5000)
 										if (hatmobhp[i] * hatmobcount[i] > best) {
 											best = hatmobhp[i] * hatmobcount[i];
@@ -7791,7 +7798,7 @@ TIMER_FUNC(unit_autopilot_timer)
 							i = 0;
 							best = 0;
 							while (i < nofhatmobs) {
-								if (hatmobsize[i] = SZ_MEDIUM)
+								if (hatmobsize[i] == SZ_MEDIUM)
 									if (hatmobhp[i] >= 3000)
 										if (hatmobhp[i] * hatmobcount[i] > best) {
 											best = hatmobhp[i] * hatmobcount[i];
@@ -7805,7 +7812,7 @@ TIMER_FUNC(unit_autopilot_timer)
 							i = 0;
 							best = 0;
 							while (i < nofhatmobs) {
-								if (hatmobsize[i] = SZ_SMALL)
+								if (hatmobsize[i] == SZ_SMALL)
 										if (hatmobhp[i] * hatmobcount[i] > best) {
 											best = hatmobhp[i] * hatmobcount[i];
 											sd->state.sunmob = hatmobid[i];
@@ -7816,18 +7823,17 @@ TIMER_FUNC(unit_autopilot_timer)
 							}
 						}
 
-						sd->state.autofeelhate = 2;
 					}
 					if (sd->state.autofeelhate == 2) {
-					// c. use feel
+						// c. use feel
 						if (canskill(sd))
 							if (sd->state.chosenfeel > 0)
 								if ((pc_checkskill(sd, SG_FEEL) >= sd->state.chosenfeel))
 								{
 									unit_skilluse_ifable(&sd->bl, SELF, SG_FEEL, sd->state.chosenfeel);
 								}
-					// d. use hate (do this at mob targeting insetad)
-
+						// d. use hate (do this at mob targeting insetad)
+					}
 					// Solar Hate
 					if (canskill(sd))
 						if (pc_checkskill(sd, SG_FEEL) >=1)
@@ -7858,10 +7864,6 @@ TIMER_FUNC(unit_autopilot_timer)
 									unit_skilluse_ifable(&sd->bl, foundtargetID, SG_HATE, 3);
 								}
 							}
-
-
-
-					}
 
 				}
 		}
@@ -8259,7 +8261,7 @@ TIMER_FUNC(unit_autopilot_timer)
 		if (sd->state.enableconc)
 		if (canskill(sd)) if (pc_checkskill(sd, OB_OBOROGENSOU) > 0) {
 			resettargets();
-			map_foreachinrange(targetbless, &sd->bl, 9, BL_PC, sd);
+			map_foreachinrange(targetgensou, &sd->bl, 9, BL_PC, sd);
 			if (foundtargetID > -1) {
 				unit_skilluse_ifable(&sd->bl, foundtargetID, OB_OBOROGENSOU, pc_checkskill(sd, OB_OBOROGENSOU));
 			}
@@ -9101,6 +9103,9 @@ TIMER_FUNC(unit_autopilot_timer)
 			if (pc_checkskill(sd, GS_GATLINGFEVER) > 0) if (sd->status.weapon == W_GATLING) if (!sd->sc.data[SC_GATLINGFEVER]) unit_skilluse_ifable(&sd->bl, SELF, GS_GATLINGFEVER, pc_checkskill(sd, GS_GATLINGFEVER));
 			if (pc_checkskill(sd, GS_MADNESSCANCEL) > 0) if (!sd->sc.data[SC_MADNESSCANCEL]) if (!sd->sc.data[SC_ADJUSTMENT]) if (sd->spiritball >= 4) unit_skilluse_ifable(&sd->bl, SELF, GS_MADNESSCANCEL, pc_checkskill(sd, GS_MADNESSCANCEL));
 		}
+		// Turn off Gatling Fever if stopped fighting
+		if (targetdistance <= 0) if (pc_checkskill(sd, GS_GATLINGFEVER) > 0) if (sd->sc.data[SC_GATLINGFEVER]) unit_skilluse_ifable(&sd->bl, SELF, GS_GATLINGFEVER, pc_checkskill(sd, GS_GATLINGFEVER));
+
 		}
 
 		///////////////////////////////////////////////////////////////////////////////////////////////
@@ -9143,14 +9148,15 @@ TIMER_FUNC(unit_autopilot_timer)
 						// Don't try to use if member too far, must get closer first
 						// member must be in tanking mode, or controlled by human player. Other characters are unlikely to keep monsters in the AOE while casting.
 						// targeting self is also ok if we don't have the sage skill to walk away, in case of skills with short enough cast times and no interruption.
-						if (((membersd->state.autopilotmode<=1) || ((membersd->bl.id==sd->bl.id) && (pc_checkskill(sd, SA_FREECAST)==0))) && (targetdistance2 <= 9)) {
+						if (((membersd->state.autopilotmode<=1) || ((membersd->bl.id==sd->bl.id) && (pc_checkskill(membersd, SA_FREECAST)==0))) && (targetdistance2 <= 9)) {
 							// obsolete now that leader has own variable
 
 							// This assumes skill is updated to allow free moving and do good damage otherwise it's a suicide for AI
 							// **Note** It also assumes it was modded to still ignore MDEF despite that update removing that property
 							// Gravitational Field
-							// Same priority as the big wizard spells minus one. So use only if those are resisted or subptimal
-							if (canskill(sd)) if ((pc_checkskill(sd, HW_GRAVITATION) > 0) && (Dangerdistance > 900) && (pc_search_inventory(sd, ITEMID_BLUE_GEMSTONE)>0)) {
+							// Same priority as the big wizard spells minus one. So use only if those are resisted or suboptimal
+							if (canskill(sd)) if ((pc_checkskill(sd, HW_GRAVITATION) > 0) && (Dangerdistance > 900) && (pc_search_inventory(sd, ITEMID_BLUE_GEMSTONE)>0))
+								if (skill_blockpc_get(sd, HW_GRAVITATION) == -1) {
 							int area = 2; // priority scale up by MDEf in AOEPriorityGrav
 							priority = 3 * map_foreachinrange(AOEPriorityGrav, targetbl2, area, BL_MOB, ELE_NONE) -1;
 							if ((priority>=6) && (priority>bestpriority)) {
@@ -9169,10 +9175,10 @@ TIMER_FUNC(unit_autopilot_timer)
 							// ***Note*** I removed the gemstone requirement from this, if you did not, uncomment
 							if (canskill(sd)) if ((pc_checkskill(sd, WL_COMET) > 0) && (Dangerdistance > 900) /*&& (pc_inventory_count(sd, ITEMID_RED_GEMSTONE) >= 2)*/)
 								// Requires 800 SP but we don't want to end up having none left
-								if (sd->battle_status.sp >=950) {
+								if (skill_blockpc_get(sd, WL_COMET) == -1) 	if (sd->battle_status.sp >=950) {
 								int area = 9;
 								priority = 3 * map_foreachinrange(AOEPriority, targetbl2, area, BL_MOB, skillelem(sd, WL_COMET));
-								if ((priority >= 24) && (priority > bestpriority)) {
+								if ((priority >= 24) && (priority > bestpriority)){
 									spelltocast = WL_COMET; bestpriority = priority; IDtarget = foundtargetID2;
 								}
 							}
@@ -9211,7 +9217,8 @@ TIMER_FUNC(unit_autopilot_timer)
 
 							// Swirling Petal
 								if (canskill(sd)) if ((pc_checkskill(sd, KO_HUUMARANKA) > 0))
-									if (sd->status.weapon == W_HUUMA) {
+									if (sd->status.weapon == W_HUUMA)
+										if (skill_blockpc_get(sd, KO_HUUMARANKA) == -1) {
 										int area = 3;
 										priority = 3 * map_foreachinrange(AOEPriority, targetbl2, area, BL_MOB, skillelem(sd, KO_HUUMARANKA));
 										if ((priority >= 18) && (priority > bestpriority)) {
@@ -9229,7 +9236,8 @@ TIMER_FUNC(unit_autopilot_timer)
 							}
 
 							// Psychic Wave
-							if (canskill(sd)) if ((pc_checkskill(sd, SO_PSYCHIC_WAVE) > 0) && (Dangerdistance > 900)) {
+							if (canskill(sd)) if ((pc_checkskill(sd, SO_PSYCHIC_WAVE) > 0) && (Dangerdistance > 900))
+								if (skill_blockpc_get(sd, SO_PSYCHIC_WAVE) == -1) {
 								int area = 3;
 								if (pc_checkskill(sd, SO_PSYCHIC_WAVE) > 2) area++;
 								if (pc_checkskill(sd, SO_PSYCHIC_WAVE) > 4) area++;
@@ -9249,15 +9257,17 @@ TIMER_FUNC(unit_autopilot_timer)
 								}
 							}
 							// Diamond Dust
-							if (canskill(sd)) if ((pc_checkskill(sd, SO_DIAMONDDUST) > 0) && (Dangerdistance > 900)) {
+							if (canskill(sd)) if ((pc_checkskill(sd, SO_DIAMONDDUST) > 0) && (Dangerdistance > 900))
+								if (skill_blockpc_get(sd, SO_DIAMONDDUST) == -1) {
 								int area = 4;
 								priority = 3 * map_foreachinrange(AOEPriority, targetbl2, area, BL_MOB, skillelem(sd, SO_DIAMONDDUST));
-								if ((priority >= 18) && (priority > bestpriority)) {
+								if ((priority >= 18) && (priority > bestpriority)){
 									spelltocast = SO_DIAMONDDUST; bestpriority = priority; IDtarget = foundtargetID2;
 								}
 							}
 							// Earth Grave
-							if (canskill(sd)) if ((pc_checkskill(sd, SO_EARTHGRAVE) > 0) && (Dangerdistance > 900)) {
+							if (canskill(sd)) if ((pc_checkskill(sd, SO_EARTHGRAVE) > 0) && (Dangerdistance > 900))
+								if (skill_blockpc_get(sd, SO_EARTHGRAVE) == -1) {
 								int area = 4;
 								priority = 3 * map_foreachinrange(AOEPriority, targetbl2, area, BL_MOB, skillelem(sd, SO_EARTHGRAVE));
 								if ((priority >= 18) && (priority > bestpriority)) {
@@ -9266,7 +9276,8 @@ TIMER_FUNC(unit_autopilot_timer)
 							}
 							// Ride in Lightning - Sura AOE
 							if (canskill(sd)) if ((pc_checkskill(sd, SR_RIDEINLIGHTNING) > 3))
-							if (sd->spiritball>=5) {
+							if (sd->spiritball>=5)
+								if (skill_blockpc_get(sd, SR_RIDEINLIGHTNING) == -1) {
 								int area = 3;
 								priority = 2 * map_foreachinrange(AOEPriority, targetbl2, area, BL_MOB, skillelem(sd, SR_RIDEINLIGHTNING));
 								if ((priority >= 12) && (priority > bestpriority)) {
@@ -9275,10 +9286,11 @@ TIMER_FUNC(unit_autopilot_timer)
 							}
 							// Crazy Weed
 							if (canskill(sd)) if ((pc_checkskill(sd, GN_CRAZYWEED) > 0) && (Dangerdistance > 900))
-								if (pc_search_inventory(sd, 6210) >= 0) {
+								if (pc_search_inventory(sd, 6210) >= 0)
+									if (skill_blockpc_get(sd, GN_CRAZYWEED) == -1) {
 								int area = 2;
 								priority = 3 * map_foreachinrange(AOEPriority, targetbl2, area, BL_MOB, skillelem(sd, GN_CRAZYWEED));
-								if ((priority >= 18) && (priority > bestpriority)) {
+								if ((priority >= 18) && (priority > bestpriority)){
 									spelltocast = GN_CRAZYWEED; bestpriority = priority; IDtarget = foundtargetID2;
 								}
 							}
@@ -9286,6 +9298,7 @@ TIMER_FUNC(unit_autopilot_timer)
 							// Cold Slower
 							if (canskill(sd)) if ((pc_checkskill(sd, NC_COLDSLOWER) > 2))
 								if (pc_ismadogear(sd))
+									if (skill_blockpc_get(sd, NC_COLDSLOWER) == -1)
 									if (pc_search_inventory(sd, 6147) >= 0)
 										if (pc_search_inventory(sd, 6146) >= 0) {
 								int area = 4;
@@ -9297,7 +9310,8 @@ TIMER_FUNC(unit_autopilot_timer)
 							
 
 							// Dragon Breath
-							if (canskill(sd)) if ((pc_checkskill(sd, RK_DRAGONBREATH) > 6)) if (pc_isridingdragon(sd)) {
+							if (canskill(sd)) if ((pc_checkskill(sd, RK_DRAGONBREATH) > 6)) if (pc_isridingdragon(sd))
+								if (skill_blockpc_get(sd, RK_DRAGONBREATH) == -1) {
 								int area = 4; if (pc_checkskill(sd, RK_DRAGONBREATH) > 8) area++;
 								priority = 3 * map_foreachinrange(AOEPriority, targetbl2, area, BL_MOB, skillelem(sd, RK_DRAGONBREATH));
 								if ((priority >= 18) && (priority > bestpriority)) {
@@ -9306,7 +9320,8 @@ TIMER_FUNC(unit_autopilot_timer)
 							}
 
 							// Dragon Breath - Water
-							if (canskill(sd)) if ((pc_checkskill(sd, RK_DRAGONBREATH_WATER) > 6)) if (pc_isridingdragon(sd)) {
+							if (canskill(sd)) if ((pc_checkskill(sd, RK_DRAGONBREATH_WATER) > 6)) if (pc_isridingdragon(sd))
+								if (skill_blockpc_get(sd, RK_DRAGONBREATH_WATER) == -1) {
 								int area = 4; if (pc_checkskill(sd, RK_DRAGONBREATH_WATER) > 8) area++;
 								priority = 3 * map_foreachinrange(AOEPriority, targetbl2, area, BL_MOB, skillelem(sd, RK_DRAGONBREATH_WATER));
 								if ((priority >= 18) && (priority > bestpriority)) {
@@ -9357,13 +9372,14 @@ TIMER_FUNC(unit_autopilot_timer)
 							// Class has no other ranged AOE so even if damage is poor to low STR, this is the only thing to use in "skill" mode.
 							if (canskill(sd)) if ((pc_checkskill(sd, LG_CANNONSPEAR) > 2))
 								if ((sd->status.weapon == W_1HSPEAR) || (sd->status.weapon == W_2HSPEAR))
+									if (skill_blockpc_get(sd, LG_CANNONSPEAR) == -1)
 									{  // Note : Like sharp shooting, ignoring the Line effect, only considering targets next to the main target.
 										resettargets();
 										map_foreachinrange(targetnearest, targetbl2, 9, BL_MOB, sd); // Nearest to the tank, not us!
 										if (foundtargetID > -1) {
 											int area = 1;
 											priority = 2 * map_foreachinrange(AOEPriority, targetbl, area, BL_MOB, skillelem(sd, LG_CANNONSPEAR));
-											if (((priority >= 12) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)) {
+											if (((priority >= 12) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)){
 												spelltocast = LG_CANNONSPEAR; bestpriority = priority; IDtarget = foundtargetID;
 											}
 										}
@@ -9373,13 +9389,14 @@ TIMER_FUNC(unit_autopilot_timer)
 								if (pc_ismadogear(sd))
 									if (pc_search_inventory(sd, 2139) >= 0)
 										if (pc_search_inventory(sd, 6146) >= 0)
+											if (skill_blockpc_get(sd, NC_FLAMELAUNCHER) == -1)
 										{  // Note : Like sharp shooting, ignoring the Line effect, only considering targets next to the main target.
 									resettargets();
 									map_foreachinrange(targetnearest, targetbl2, 9, BL_MOB, sd); // Nearest to the tank, not us!
 									if (foundtargetID > -1) {
 										int area = 1;
 										priority = 2 * map_foreachinrange(AOEPriority, targetbl, area, BL_MOB, skillelem(sd, NC_FLAMELAUNCHER));
-										if (((priority >= 12) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 5)) {
+										if (((priority >= 12) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 5)){
 											spelltocast = NC_FLAMELAUNCHER; bestpriority = priority; IDtarget = foundtargetID;
 										}
 									}
@@ -9401,6 +9418,7 @@ TIMER_FUNC(unit_autopilot_timer)
 							// This is special - it targets a monster despite having AOE, not a ground skill
 							// *** NOTE : I changed this to not consume a soul ball. If it does on yours, add that condition.
 							if (canskill(sd)) if ((pc_checkskill(sd, SP_SHA) > 0))
+								if (skill_blockpc_get(sd, SP_SHA) == -1)
 								// this deals bad damage, use it only to trigger soul reaper for more souls
 								if (sd->sc.data[SC_SOULREAPER]) {
 								resettargets();
@@ -9411,7 +9429,7 @@ TIMER_FUNC(unit_autopilot_timer)
 									if (sd->soulball < 5) priority *= 2;
 									if (sd->soulball < 10) priority *= 2;
 									if (sd->soulball > 15) priority = 0;
-									if (((priority >= 6) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)) {
+									if (((priority >= 6) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)){
 										spelltocast = SP_SHA; bestpriority = priority; IDtarget = foundtargetID;
 									}
 								}
@@ -9419,6 +9437,7 @@ TIMER_FUNC(unit_autopilot_timer)
 							// Eswhoo
 							// This is special - it targets a monster despite having AOE, not a ground skill
 							if (canskill(sd)) if ((pc_checkskill(sd, SP_SWHOO) > 0))
+								if (skill_blockpc_get(sd, SP_SWHOO) == -1)
 								// requires combo
 								if (sd->sc.data[SC_USE_SKILL_SP_SPA]) {
 									resettargets();
@@ -9427,10 +9446,10 @@ TIMER_FUNC(unit_autopilot_timer)
 										int area = 1;
 										if (pc_checkskill(sd, SP_SWHOO) >= 4) area++;
 										if (pc_checkskill(sd, SP_SWHOO) >= 7) area++;
-										if (pc_checkskill(sd, SP_SWHOO) >= 10) area++;										priority = map_foreachinrange(AOEPriority, targetbl, area, BL_MOB, skillelem(sd, SP_SWHOO));
-										priority = 2*map_foreachinrange(AOEPriority, targetbl, area, BL_MOB, skillelem(sd, SP_SHA));
+										if (pc_checkskill(sd, SP_SWHOO) >= 10) area++;
+										priority = 3*map_foreachinrange(AOEPriority, targetbl, area, BL_MOB, skillelem(sd, SP_SWHOO));
 
-										if (((priority >= 12) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)) {
+										if (((priority >= 18) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)){
 											spelltocast = SP_SWHOO; bestpriority = priority; IDtarget = foundtargetID;
 										}
 									}
@@ -9441,13 +9460,14 @@ TIMER_FUNC(unit_autopilot_timer)
 							// **** Note, I changed this skill to be a simple AOE with no time delay. If you did not, you might want different AI.
 							if (canskill(sd)) if ((pc_checkskill(sd, GN_SPORE_EXPLOSION) > 0))
 								if (pc_search_inventory(sd, 6212) >= 0)
+									if (skill_blockpc_get(sd, GN_SPORE_EXPLOSION) == -1)
 								{
 								resettargets();
 								map_foreachinrange(targetnearest, targetbl2, 9, BL_MOB, sd);
 								if (foundtargetID > -1) {
 									int area = pc_checkskill(sd, GN_SPORE_EXPLOSION);
 									priority = 2* map_foreachinrange(AOEPriority, targetbl, area, BL_MOB, skillelem(sd, GN_SPORE_EXPLOSION));
-									if (((priority >= 12) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 11)) {
+									if (((priority >= 12) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 11)){
 										spelltocast = GN_SPORE_EXPLOSION; bestpriority = priority; IDtarget = foundtargetID;
 									}
 								}
@@ -9455,13 +9475,14 @@ TIMER_FUNC(unit_autopilot_timer)
 							// Crimson Rock
 							// This is special - it targets a monster despite having AOE, not a ground skill
 							// higher priority than 2nd job skills because it's faster to cast and damage is almost as good but more reliable and is applied quicker too.
-							if (canskill(sd)) if ((pc_checkskill(sd, WL_CRIMSONROCK) > 0) && (Dangerdistance > 900)) {
+							if (canskill(sd)) if ((pc_checkskill(sd, WL_CRIMSONROCK) > 0) && (Dangerdistance > 900))
+								if (skill_blockpc_get(sd, WL_CRIMSONROCK) == -1) {
 								resettargets();
 								map_foreachinrange(targetnearest, targetbl2, 9, BL_MOB, sd);
 								if (foundtargetID > -1) {
 									int area = 2;
 									priority = 4*map_foreachinrange(AOEPriority, targetbl, area, BL_MOB, skillelem(sd, WL_CRIMSONROCK));
-									if (((priority >= 24) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)) {
+									if (((priority >= 24) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)){
 										spelltocast = WL_CRIMSONROCK; bestpriority = priority; IDtarget = foundtargetID;
 									}
 								}
@@ -9498,7 +9519,8 @@ TIMER_FUNC(unit_autopilot_timer)
 
 							// Adoramus
 							// This is special - it targets a monster despite having AOE, not a ground skill
-							if (canskill(sd)) if ((pc_checkskill(sd, AB_ADORAMUS) > 0) && (Dangerdistance > 900)) {
+							if (canskill(sd)) if ((pc_checkskill(sd, AB_ADORAMUS) > 0) && (Dangerdistance > 900))
+								if (skill_blockpc_get(sd, AB_ADORAMUS) == -1) {
 								// save some gems for resurrection and whatever
 								// ***NOTE*** Uncomment this if Adoramus consumes gemstones on your server
 /*								if (pc_inventory_count(sd, ITEMID_BLUE_GEMSTONE) > 10) {*/
@@ -9507,7 +9529,7 @@ TIMER_FUNC(unit_autopilot_timer)
 								if (foundtargetID > -1) {
 									int area = 1; if (pc_checkskill(sd, AB_ADORAMUS) >= 7) area++;
 									priority = 2 * map_foreachinrange(AOEPriority, targetbl, area, BL_MOB, skillelem(sd, AB_ADORAMUS));
-									if (((priority >= 6) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)) {
+									if (((priority >= 6) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)){
 										spelltocast = AB_ADORAMUS; bestpriority = priority; IDtarget = foundtargetID;
 									}
 								}
@@ -9585,6 +9607,7 @@ TIMER_FUNC(unit_autopilot_timer)
 
 							// Arrow Storm
 							if (canskill(sd)) if ((pc_checkskill(sd, RA_ARROWSTORM) > 0)) if ((sd->status.weapon == W_BOW) && (Dangerdistance > 900))
+								if (skill_blockpc_get(sd, RA_ARROWSTORM) == -1)
 							{
 								resettargets();
 								map_foreachinrange(targetnearest, targetbl2, 9 + pc_checkskill(sd, AC_VULTURE), BL_MOB, sd);
@@ -9602,6 +9625,7 @@ TIMER_FUNC(unit_autopilot_timer)
 							// Great Echo
 							if (canskill(sd)) if ((pc_checkskill(sd, WM_GREAT_ECHO) > 0))
 								if (pc_search_inventory(sd, 11513) >= 0)
+									if (skill_blockpc_get(sd, WM_GREAT_ECHO) == -1)
 							{
 								resettargets();
 								map_foreachinrange(targetnearest, targetbl2, 9 , BL_MOB, sd);
@@ -9610,7 +9634,7 @@ TIMER_FUNC(unit_autopilot_timer)
 									arrowchange(sd, targetmd);
 									// *** NOTE *** I modified the "chorusbonus" function to return the number of performers (1 for solo 2 for two etc), so you might want to change priority here
 									priority = battle_calc_chorusbonus(sd) * map_foreachinrange(AOEPriority, targetbl, area, BL_MOB, skillelem(sd,WM_GREAT_ECHO));
-									if (((priority >= 6* battle_calc_chorusbonus(sd)) && (priority > bestpriority))) {
+									if (((priority >= 6* battle_calc_chorusbonus(sd)) && (priority > bestpriority))){
 										spelltocast = WM_GREAT_ECHO; bestpriority = priority; IDtarget = foundtargetID;
 									}
 								}
@@ -9619,6 +9643,7 @@ TIMER_FUNC(unit_autopilot_timer)
 							// Severe Rainstorm
 							if (canskill(sd)) if ((pc_checkskill(sd, WM_SEVERE_RAINSTORM) > 0)) if (sd->status.weapon == W_BOW)
 								if ((Dangerdistance > 900) || (sd->special_state.no_castcancel))
+									if (skill_blockpc_get(sd, WM_SEVERE_RAINSTORM) == -1)
 							{
 								resettargets();
 								map_foreachinrange(targetnearest, targetbl2, 9 + pc_checkskill(sd, AC_VULTURE), BL_MOB, sd);
@@ -9653,14 +9678,15 @@ TIMER_FUNC(unit_autopilot_timer)
 							// Shattering Storm
 							// This is special - it targets a monster despite having AOE, not a ground skill
 							if (canskill(sd)) if ((pc_checkskill(sd, RL_S_STORM) > 0))
-								if (sd->status.weapon == W_SHOTGUN) {
+								if (sd->status.weapon == W_SHOTGUN)
+									if (skill_blockpc_get(sd, RL_S_STORM) == -1) {
 										resettargets();
 										map_foreachinrange(targetnearest, targetbl2, 9, BL_MOB, sd);
 										if (foundtargetID > -1) {
 											int area = 2;
 											ammochange2(sd, targetmd);
 											priority = 2 * map_foreachinrange(AOEPriority, targetbl, area, BL_MOB, skillelem(sd, RL_S_STORM));
-											if (((priority >= 12) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)) {
+											if (((priority >= 12) && (priority > bestpriority)) && (distance_bl(targetbl, &sd->bl) <= 9)){
 												spelltocast = RL_S_STORM; bestpriority = priority; IDtarget = foundtargetID;
 										}
 									}
@@ -9684,9 +9710,10 @@ TIMER_FUNC(unit_autopilot_timer)
 
 							// Magnus Exorcismus
 							// **Note** Assumes it only works on Demons and Undead. If you want to include all enemies, replace Magnuspriority with AOEpriority
-							if (canskill(sd)) if ((pc_checkskill(sd, PR_MAGNUS) > 0) && ((Dangerdistance > 900) || (sd->special_state.no_castcancel)) && (pc_search_inventory(sd, ITEMID_BLUE_GEMSTONE) >= 0)) {
+							if (canskill(sd)) if ((pc_checkskill(sd, PR_MAGNUS) > 0) && ((Dangerdistance > 900) || (sd->special_state.no_castcancel)) && (pc_search_inventory(sd, ITEMID_BLUE_GEMSTONE) >= 0))
+								if (skill_blockpc_get(sd, PR_MAGNUS) == -1) {
 								priority = 3 * map_foreachinrange(Magnuspriority, targetbl2, 3, BL_MOB, skillelem(sd, PR_MAGNUS));
-								if ((priority >= 18) && (priority > bestpriority)) {
+								if ((priority >= 18) && (priority > bestpriority)){
 									spelltocast = PR_MAGNUS; bestpriority = priority; IDtarget = foundtargetID2;
 								}
 							}
@@ -9703,33 +9730,38 @@ TIMER_FUNC(unit_autopilot_timer)
 					}
 
 					// Earth Strain 4 directions
-					if (canskill(sd)) if ((pc_checkskill(sd, WL_EARTHSTRAIN) > 0) && (Dangerdistance > 900)) {
-						priority = 4 * map_foreachinallarea(AOEPriority, sd->bl.m, sd->bl.x-10, sd->bl.y-5, sd->bl.x, sd->bl.y+5, BL_MOB, skillelem(sd, WL_EARTHSTRAIN));
-						if ((priority >= 24) && (priority > bestpriority)) {
-							spelltocast = WL_EARTHSTRAIN; bestpriority = priority; IDtarget = 1;
+
+					if ((pc_checkskill(sd, WL_EARTHSTRAIN) > 0) && (Dangerdistance > 900))
+						if (skill_blockpc_get(sd, WL_EARTHSTRAIN) == -1) {
+						if (canskill(sd)) {
+							priority = 4 * map_foreachinallarea(AOEPriority, sd->bl.m, sd->bl.x - 10, sd->bl.y - 5, sd->bl.x, sd->bl.y + 5, BL_MOB, skillelem(sd, WL_EARTHSTRAIN));
+							if ((priority >= 24) && (priority > bestpriority)) {
+								spelltocast = WL_EARTHSTRAIN; bestpriority = priority; IDtarget = 1;
+							}
 						}
-					}
-					if (canskill(sd)) if ((pc_checkskill(sd, WL_EARTHSTRAIN) > 0) && (Dangerdistance > 900)) {
-						priority = 4 * map_foreachinallarea(AOEPriority, sd->bl.m, sd->bl.x, sd->bl.y-5, sd->bl.x + 10, sd->bl.y+5, BL_MOB, skillelem(sd, WL_EARTHSTRAIN));
-						if ((priority >= 24) && (priority > bestpriority)) {
-							spelltocast = WL_EARTHSTRAIN; bestpriority = priority; IDtarget = 2;
+						if (canskill(sd)) {
+							priority = 4 * map_foreachinallarea(AOEPriority, sd->bl.m, sd->bl.x, sd->bl.y - 5, sd->bl.x + 10, sd->bl.y + 5, BL_MOB, skillelem(sd, WL_EARTHSTRAIN));
+							if ((priority >= 24) && (priority > bestpriority)) {
+								spelltocast = WL_EARTHSTRAIN; bestpriority = priority; IDtarget = 2;
+							}
 						}
-					}
-					if (canskill(sd)) if ((pc_checkskill(sd, WL_EARTHSTRAIN) > 0) && (Dangerdistance > 900)) {
-						priority = 4 * map_foreachinallarea(AOEPriority, sd->bl.m, sd->bl.x-5, sd->bl.y-10, sd->bl.x+5, sd->bl.y, BL_MOB, skillelem(sd, WL_EARTHSTRAIN));
-						if ((priority >= 24) && (priority > bestpriority)) {
-							spelltocast = WL_EARTHSTRAIN; bestpriority = priority; IDtarget = 3;
+						if (canskill(sd)) {
+							priority = 4 * map_foreachinallarea(AOEPriority, sd->bl.m, sd->bl.x - 5, sd->bl.y - 10, sd->bl.x + 5, sd->bl.y, BL_MOB, skillelem(sd, WL_EARTHSTRAIN));
+							if ((priority >= 24) && (priority > bestpriority)) {
+								spelltocast = WL_EARTHSTRAIN; bestpriority = priority; IDtarget = 3;
+							}
 						}
-					}
-					if (canskill(sd)) if ((pc_checkskill(sd, WL_EARTHSTRAIN) > 0) && (Dangerdistance > 900)) {
-						priority = 4 * map_foreachinallarea(AOEPriority, sd->bl.m, sd->bl.x-5, sd->bl.y, sd->bl.x + 5, sd->bl.y+10, BL_MOB, skillelem(sd, WL_EARTHSTRAIN));
-						if ((priority >= 24) && (priority > bestpriority)) {
-							spelltocast = WL_EARTHSTRAIN; bestpriority = priority; IDtarget = 4;
+						if (canskill(sd)) {
+							priority = 4 * map_foreachinallarea(AOEPriority, sd->bl.m, sd->bl.x - 5, sd->bl.y, sd->bl.x + 5, sd->bl.y + 10, BL_MOB, skillelem(sd, WL_EARTHSTRAIN));
+							if ((priority >= 24) && (priority > bestpriority)) {
+								spelltocast = WL_EARTHSTRAIN; bestpriority = priority; IDtarget = 4;
+							}
 						}
 					}
 					// Fire Rain 4 directions
 					if (canskill(sd)) if (sd->status.weapon == W_GATLING) if (sd->spiritball >= 1)
-						if ((pc_checkskill(sd, RL_FIRE_RAIN) > 0)) {
+						if ((pc_checkskill(sd, RL_FIRE_RAIN) > 0))
+							if (skill_blockpc_get(sd, RL_FIRE_RAIN) == -1) {
 							priority = 3 * map_foreachinallarea(AOEPriority, sd->bl.m, sd->bl.x - 10, sd->bl.y - 1, sd->bl.x, sd->bl.y + 1, BL_MOB, skillelem(sd, WL_EARTHSTRAIN));
 							if ((priority >= 24) && (priority > bestpriority)) {
 								spelltocast = RL_FIRE_RAIN; bestpriority = priority; IDtarget = 1;
@@ -9773,29 +9805,47 @@ TIMER_FUNC(unit_autopilot_timer)
 							}
 						}
 					}
+
+					// Genesis Ray
+					// **Note** : I modded this skill to be uninterruptable - a self targeted crowd control AOE is useless if it is interrupted. If yours is not modded, uncomment this line!
+					if (canskill(sd)) if ((pc_checkskill(sd, LG_RAYOFGENESIS) >= 1)
+											 &&	((Dangerdistance > 900) || (sd->special_state.no_castcancel)) 
+						) {
+						if (nofbandingrg>=2)
+							if (skill_blockpc_get(sd, LG_RAYOFGENESIS) == -1) {
+							int area = 5;
+							priority = 3 * map_foreachinrange(AOEPriority, &sd->bl, area, BL_MOB, skillelem(sd, LG_RAYOFGENESIS));
+							if ((priority >= 18) && (priority > bestpriority)){
+								spelltocast = LG_RAYOFGENESIS; bestpriority = priority; IDtarget = sd->bl.id;
+							}
+						}
+					}
+
 					// Sura - Lion Howl
 					if (canskill(sd)) if ((pc_checkskill(sd, SR_HOWLINGOFLION) >= 5)
 						//					 &&	((Dangerdistance > 900) || (sd->special_state.no_castcancel)) 
-						) {
-						 {
+						)
+						if (skill_blockpc_get(sd, SR_HOWLINGOFLION) == -1) {
+						 
 							int area = 7;
 							priority = 2 * map_foreachinrange(AOEPriority, &sd->bl, area, BL_MOB, skillelem(sd, SR_HOWLINGOFLION));
 							if ((priority >= 12) && (priority > bestpriority)) {
 								spelltocast = SR_HOWLINGOFLION; bestpriority = priority; IDtarget = sd->bl.id;
 							}
-						}
 					}
 					// Frost Misty
 					if (canskill(sd)) if ((pc_checkskill(sd, WL_FROSTMISTY) == 5)
 											 &&	((Dangerdistance > 900) || (sd->special_state.no_castcancel)) 
-						) {int area = 10;
+						)	if (skill_blockpc_get(sd, WL_FROSTMISTY) == -1) {
+							int area = 10;
 							priority = 2 * map_foreachinrange(AOEPriorityFrostMist, &sd->bl, area, BL_MOB);
 							if ((priority >= 18) && (priority > bestpriority)) {
 								spelltocast = WL_FROSTMISTY; bestpriority = priority; IDtarget = sd->bl.id;
 							}
 						}
 					// Jack Frost
-					if (canskill(sd)) if ((pc_checkskill(sd, WL_JACKFROST) >= 4)) {
+					if (canskill(sd)) if ((pc_checkskill(sd, WL_JACKFROST) >= 4))
+						if (skill_blockpc_get(sd, WL_JACKFROST) == -1) {
 						int area = 10;
 						priority = 2 * map_foreachinrange(AOEPriorityJackFrost, &sd->bl, area, BL_MOB);
 						if ((priority >= 18) && (priority > bestpriority)) {
@@ -9809,33 +9859,43 @@ TIMER_FUNC(unit_autopilot_timer)
 
 						resettargets();
 						map_foreachinrange(targetnearest, &sd->bl, area, BL_MOB, sd);
-						int ele = ammochange2(sd, targetmd);
+						if (foundtargetID > -1) {
+							int ele = ammochange2(sd, targetmd);
 
-						priority = map_foreachinrange(AOEPriority, &sd->bl, area, BL_MOB, ele); 
-						float pmod = 1;
-						if (sd->sc.data[SC_FALLEN_ANGEL]) pmod = 1.5;
-						if ((priority >= 6) && ((int)(priority*pmod) > bestpriority)) {
-							spelltocast = GS_DESPERADO; bestpriority = (int)(priority*pmod); IDtarget = sd->bl.id;
+							if (ele >= 0) {
+								priority = map_foreachinrange(AOEPriority, &sd->bl, area, BL_MOB, ele);
+								float pmod = 1;
+								if (sd->sc.data[SC_FALLEN_ANGEL]) pmod = 1.5;
+								if ((priority >= 6) && ((int)(priority*pmod) > bestpriority)) {
+									spelltocast = GS_DESPERADO; bestpriority = (int)(priority*pmod); IDtarget = sd->bl.id;
+								}
+							}
 						}
 					}
 
 					// Kunai Splash
-					if (canskill(sd)) if (pc_checkskill(sd, KO_HAPPOKUNAI) > 0){
+					if (canskill(sd)) if (pc_checkskill(sd, KO_HAPPOKUNAI) > 0)
+						if (skill_blockpc_get(sd, KO_HAPPOKUNAI) == -1) {
 						int area = 5;
 
 						resettargets();
 						map_foreachinrange(targetnearest, &sd->bl, area, BL_MOB, sd);
-						int ele = kunaichange(sd, targetmd);
+						if (foundtargetID > -1) {
+							int ele = kunaichange(sd, targetmd, 8);
 
-						priority = 2*map_foreachinrange(AOEPriority, &sd->bl, area, BL_MOB, ele); 
-						if ((priority >= 12) && (priority > bestpriority)) {
-							spelltocast = KO_HAPPOKUNAI; bestpriority = priority; IDtarget = sd->bl.id;
+							if (ele >= 0) {
+								priority = 2 * map_foreachinrange(AOEPriority, &sd->bl, area, BL_MOB, ele);
+								if ((priority >= 12) && (priority > bestpriority)) {
+									spelltocast = KO_HAPPOKUNAI; bestpriority = priority; IDtarget = sd->bl.id;
+								}
+							}
 						}
 					}
 
 					// Round Trip - always centered on user
 					if (canskill(sd)) if (pc_checkskill(sd, RL_R_TRIP) > 0) if (sd->status.weapon == W_GATLING)
-					 if (sd->spiritball >= 1) {
+					 if (sd->spiritball >= 1)
+						 if (skill_blockpc_get(sd, RL_R_TRIP) == -1) {
 						int area = 3;
 						if (pc_checkskill(sd, RL_R_TRIP) > 3) area++;
 						if (pc_checkskill(sd, RL_R_TRIP) > 6) area++;
@@ -9843,31 +9903,40 @@ TIMER_FUNC(unit_autopilot_timer)
 
 						resettargets();
 						map_foreachinrange(targetnearest, &sd->bl, area, BL_MOB, sd);
-						int ele = ammochange2(sd, targetmd);
+						if (foundtargetID > -1) {
+							int ele = ammochange2(sd, targetmd);
 
-						priority = map_foreachinrange(AOEPriority, &sd->bl, area, BL_MOB, ele);
-						double pmod = 1;
-						if (sd->status.base_level > 100) pmod = sd->status.base_level / 100.0;
+							if (ele >= 0) {
+								priority = map_foreachinrange(AOEPriority, &sd->bl, area, BL_MOB, ele);
+								double pmod = 1;
+								if (sd->status.base_level > 100) pmod = sd->status.base_level / 100.0;
 
-						if ((priority >= 6) && ((int)(priority*pmod) > bestpriority)) {
-							spelltocast = RL_R_TRIP; bestpriority = (int)(priority*pmod); IDtarget = sd->bl.id;
+								if ((priority >= 6) && ((int)(priority*pmod) > bestpriority)) {
+									spelltocast = RL_R_TRIP; bestpriority = (int)(priority*pmod); IDtarget = sd->bl.id;
+								}
+							}
 						}
 					}
 
 					// Fire Dance - always centered on user
 					if (canskill(sd)) if (pc_checkskill(sd, RL_FIREDANCE) > 0) if (sd->status.weapon == W_REVOLVER)
-					 if (sd->spiritball >= 1) {
+					 if (sd->spiritball >= 1)
+						 if (skill_blockpc_get(sd, RL_FIREDANCE) == -1) {
 						int area = 3;
 
 						resettargets();
 						map_foreachinrange(targetnearest, &sd->bl, area, BL_MOB, sd);
-						int ele = ammochange2(sd, targetmd);
+						if (foundtargetID > -1) {
+							int ele = ammochange2(sd, targetmd);
 
-						double pmod = 1;
-						if (sd->status.base_level > 100) pmod = sd->status.base_level / 100.0;
-						priority = map_foreachinrange(AOEPriority, &sd->bl, area, BL_MOB, ele); 
-						if ((priority >= 6) && ((int)(priority*pmod) > bestpriority)) {
-							spelltocast = RL_FIREDANCE; bestpriority = (int)(priority*pmod); IDtarget = sd->bl.id;
+							if (ele >= 0) {
+								double pmod = 1;
+								if (sd->status.base_level > 100) pmod = sd->status.base_level / 100.0;
+								priority = map_foreachinrange(AOEPriority, &sd->bl, area, BL_MOB, ele);
+								if ((priority >= 6) && ((int)(priority*pmod) > bestpriority)) {
+									spelltocast = RL_FIREDANCE; bestpriority = (int)(priority*pmod); IDtarget = sd->bl.id;
+								}
+							}
 						}
 					}
 
@@ -9892,6 +9961,7 @@ TIMER_FUNC(unit_autopilot_timer)
 							|| (spelltocast == RL_FIREDANCE)
 							|| (spelltocast == RL_R_TRIP)
 							|| (spelltocast == KO_HAPPOKUNAI)
+							|| (spelltocast == SR_HOWLINGOFLION)
 							) unit_skilluse_ifable(&sd->bl, SELF, spelltocast, pc_checkskill(sd, spelltocast));
 						else
 						if ((spelltocast == MG_FIREBALL) // Skills that target a monster, not the ground 
@@ -9901,6 +9971,7 @@ TIMER_FUNC(unit_autopilot_timer)
 							|| (spelltocast == NJ_KAMAITACHI)
 							|| (spelltocast == AC_SHOWER)
 							|| (spelltocast == AB_JUDEX)
+							|| (spelltocast == RL_S_STORM)
 							|| (spelltocast == AB_ADORAMUS)
 							|| (spelltocast == GS_SPREADATTACK)
 							|| (spelltocast == HT_BLITZBEAT)
@@ -9911,6 +9982,7 @@ TIMER_FUNC(unit_autopilot_timer)
 							|| (spelltocast == LG_CANNONSPEAR)
 							|| (spelltocast == NC_FLAMELAUNCHER)
 							|| (spelltocast == SP_SHA)
+							|| (spelltocast == SP_SWHOO)
 							) unit_skilluse_ifable(&sd->bl, IDtarget, spelltocast, pc_checkskill(sd, spelltocast));
 						else
 							unit_skilluse_ifablexy(&sd->bl, IDtarget, spelltocast, pc_checkskill(sd, spelltocast));
@@ -10101,12 +10173,14 @@ TIMER_FUNC(unit_autopilot_timer)
 				unit_skilluse_ifable(&sd->bl, SELF, SC_FEINTBOMB, pc_checkskill(sd, SC_FEINTBOMB));
 		}
 
-		if (sd->class_ == MAPID_STAR_EMPEROR)
+		if ((sd->class_ & MAPID_THIRDMASK) == MAPID_STAR_EMPEROR) 
 			if (sd->state.autopilotmode == 2) {
 			// Lunar branch skills are not for tanking
 			if (prefer == PREFERMOON)
 				if ((sd->sc.data[SC_UNIVERSESTANCE])
-					|| (sd->sc.data[SC_LUNARSTANCE])) {
+					|| (sd->sc.data[SC_LUNARSTANCE]))
+					if (foundtargetID2>-1)
+				{
 					if (pc_checkskill(sd, SJ_NEWMOONKICK) > 0) if (canskill(sd))
 						if (leaderdistance < 8) if ((Dangerdistance <= 3) || (targetdistance2<=3)) if (!sd->sc.data[SC_NEWMOON])
 							unit_skilluse_ifable(&sd->bl, SELF, SJ_NEWMOONKICK, pc_checkskill(sd, SJ_NEWMOONKICK));
@@ -10194,6 +10268,7 @@ TIMER_FUNC(unit_autopilot_timer)
 		// if you did not, you have to disable this block.
 		if (pc_checkskill(sd, SP_SOULEXPLOSION) > 0) {
 			if (((sd->state.autopilotmode == 2)) && (Dangerdistance > 900))
+				if (partycount>=5)
 				if (elemstrong(targetmd2, skillelem(sd, SP_SOULEXPLOSION)))
 				if (soulexpvalid(sd)) {
 					unit_skilluse_ifable(&sd->bl, foundtargetID2, SP_SOULEXPLOSION, pc_checkskill(sd, SP_SOULEXPLOSION));
@@ -10551,14 +10626,14 @@ TIMER_FUNC(unit_autopilot_timer)
 			// only use on high HP enemies
 			if (foundtargetRA > -1) if (canskill(sd)) if ((pc_checkskill(sd, RL_SLUGSHOT) > 0)) if (sd->state.autopilotmode != 3) {
 				if (pc_inventory_count(sd, 25187) >= 1)
-					if (targetRAmd->status.hp < 600 * sd->status.base_level)
+					if (targetRAmd->status.hp > 600 * sd->status.base_level)
 						if (rangeddist <= 9 + pc_checkskill(sd, GS_SNAKEEYE)) if ((sd->status.weapon == W_SHOTGUN)) {
 					ammochange2(sd, targetRAmd);
 					unit_skilluse_ifable(&sd->bl, foundtargetRA, RL_SLUGSHOT, pc_checkskill(sd, RL_SLUGSHOT));
 				}
 			}
 
-			// Hammer of Thor
+			// Hammer of God
 			// **** Note : I changed this skill to have a range of 11.
 			// I also changed it to work like the old Dragon Tail Missile, hitting all and only Crimson Marked targets.
 			// You will need to disable this and make your own AI for this skill most likely.
@@ -10586,7 +10661,7 @@ TIMER_FUNC(unit_autopilot_timer)
 			}
 
 			// Dragon Tail
-			// **** Note : This skill uses the old behavior : only hts targets marked by Crimson Marker.
+			// **** Note : This skill uses the old behavior : only hits targets marked by Crimson Marker.
 			if (canskill(sd)) if ((pc_checkskill(sd, RL_D_TAIL) > 0)) if (sd->state.autopilotmode != 3) {
 				if ((pc_checkskill(sd, RL_C_MARKER) > 0)) if (pc_inventory_count(sd, 7665) >= 1) if ((sd->status.weapon == W_GRENADE)) {
 					nofmarks = 0;
@@ -10623,7 +10698,7 @@ TIMER_FUNC(unit_autopilot_timer)
 
 			// Anti-Material blast
 			if (foundtargetRA > -1) if (canskill(sd)) if ((pc_checkskill(sd, RL_AM_BLAST) > 0)) if (sd->state.autopilotmode != 3)
-				if (sd->spiritball >= 1) {
+				if (sd->spiritball >= 1) if (skill_blockpc_get(sd, RL_C_MARKER) == -1) {
 					if (rangeddist <= 9 + pc_checkskill(sd, GS_SNAKEEYE)) if ((sd->status.weapon == W_RIFLE)) {
 						ammochange2(sd, targetRAmd);
 						unit_skilluse_ifable(&sd->bl, foundtargetRA, RL_AM_BLAST, pc_checkskill(sd, RL_AM_BLAST));
@@ -10631,7 +10706,8 @@ TIMER_FUNC(unit_autopilot_timer)
 			}
 
 			// Mass Spiral
-			if (foundtargetRA > -1) if (canskill(sd)) if ((pc_checkskill(sd, RL_MASS_SPIRAL) > 0)) if (sd->state.autopilotmode != 3) {
+			if (foundtargetRA > -1) if (canskill(sd)) if ((pc_checkskill(sd, RL_MASS_SPIRAL) > 0)) if (sd->state.autopilotmode != 3)
+				if (skill_blockpc_get(sd, RL_C_MARKER) == -1) {
 				if (pc_inventory_count(sd, 7663) >= 1) if (sd->spiritball >= 1)
 					if (checksprate(sd, targetRAmd, 15)
 						|| (status_get_hp(bl) < status_get_max_hp(bl) / 3))
@@ -10654,6 +10730,7 @@ TIMER_FUNC(unit_autopilot_timer)
 			// Tracking
 			if (foundtargetRA > -1) if (canskill(sd)) if ((pc_checkskill(sd, GS_TRACKING) > 0)) if (sd->state.autopilotmode != 3) {
 				if (rangeddist <= 9) if (((sd->status.weapon == W_REVOLVER) && (pc_checkskill(sd, GS_RAPIDSHOWER) * 2 <= pc_checkskill(sd, GS_TRACKING))) || (sd->status.weapon == W_RIFLE))
+					if (skill_blockpc_get(sd, RL_C_MARKER) == -1)
 					if (checksprate(sd, targetRAmd, 15)
 						|| (status_get_hp(bl) < status_get_max_hp(bl) / 3)) {
 					ammochange2(sd, targetRAmd);
@@ -10690,7 +10767,7 @@ TIMER_FUNC(unit_autopilot_timer)
 				if ((pc_checkskill(sd, RL_FLICKER) > 0)) {
 				if (rangeddist <= 9 + pc_checkskill(sd, GS_SNAKEEYE)) if ((sd->status.weapon == W_GRENADE)) {
 					ammochange2(sd, targetRAmd);
-					if (!sd->sc.data[SC_H_MINE])
+					if (!targetRAmd->sc.data[SC_H_MINE])
 					unit_skilluse_ifable(&sd->bl, foundtargetRA, RL_H_MINE, pc_checkskill(sd, RL_H_MINE));
 					else
 					unit_skilluse_ifable(&sd->bl, foundtargetRA, RL_FLICKER, pc_checkskill(sd, RL_FLICKER));
@@ -10737,7 +10814,7 @@ TIMER_FUNC(unit_autopilot_timer)
 			if (foundtargetRA > -1) if (canskill(sd)) if ((pc_checkskill(sd, NJ_KUNAI) > 0))
 				// If enemy has less than 2x ATK health left, more economic to use Shurikens.
 				if (rangeddist <= 9) if (targetRAmd->status.hp>2* pc_rightside_atk(sd)) {
-				if (kunaichange(sd, targetRAmd)==1) unit_skilluse_ifable(&sd->bl, foundtargetRA, NJ_KUNAI, pc_checkskill(sd, NJ_KUNAI));
+				if (kunaichange(sd, targetRAmd, 1)>=0) unit_skilluse_ifable(&sd->bl, foundtargetRA, NJ_KUNAI, pc_checkskill(sd, NJ_KUNAI));
 			}
 
 			// Cart Cannon
@@ -10781,6 +10858,17 @@ TIMER_FUNC(unit_autopilot_timer)
 					if ((sd->state.autopilotmode == 1)) {
 						unit_skilluse_ifable(&sd->bl, foundtargetID2, LG_PINPOINTATTACK, pc_checkskill(sd, LG_PINPOINTATTACK));
 					}
+			}
+
+			// Dark Illusion
+			// this is not as great as Flying Kick but still can let the tank reach the mob a bit earlier AND has a chance to break weapon
+			if (foundtargetID2 > -1) if (canskill(sd)) if ((pc_checkskill(sd, GC_DARKILLUSION) >= targetdistance-4)) {
+				// only use in tanking mode, if enemy is not already near! 
+				if (targetdistance2 > 5) if (sd->battle_status.hp > (70 * sd->battle_status.max_hp) / 100)
+						if ((sd->battle_status.sp > (50 * sd->battle_status.max_sp) / 100))
+							if ((sd->state.autopilotmode == 1)) {
+								unit_skilluse_ifable(&sd->bl, foundtargetID2, GC_DARKILLUSION, pc_checkskill(sd, GC_DARKILLUSION));
+							}
 			}
 
 			// Shield Boomerang
@@ -10841,12 +10929,14 @@ TIMER_FUNC(unit_autopilot_timer)
 					unit_skilluse_ifable(&sd->bl, foundtargetRA, KN_SPEARBOOMERANG, pc_checkskill(sd, KN_SPEARBOOMERANG));
 				}
 			}
-			// **** Note I changed this skill to depend on DEX, if you did not, change it to AGI
 			// Cross Ripper Slasher
 			if (foundtargetRA > -1) if (canskill(sd)) if ((pc_checkskill(sd, GC_CROSSRIPPERSLASHER) > 0))
 				if (sd->sc.data[SC_ROLLINGCUTTER])
-				if ((sd->status.weapon == W_KATAR)) {
-					if ((rangeddist > 5) || (sd->battle_status.dex >= 100) || (sd->state.autopilotmode == 2)) {
+				if ((sd->status.weapon == W_KATAR))
+				if (sd->state.autopilotmode != 2) {
+					// Either we maxed the counters or we ran out of nearby enemies to spin more
+					if ((rangeddist >= 3) || (sd->sc.data[SC_ROLLINGCUTTER]->val1>=10)
+						|| (map_foreachinrange(AOEPriority, bl, 2, BL_MOB, skillelem(sd, GC_ROLLINGCUTTER)) < 6)) {
 						unit_skilluse_ifable(&sd->bl, foundtargetRA, GC_CROSSRIPPERSLASHER, pc_checkskill(sd, GC_CROSSRIPPERSLASHER));
 					}
 				}
@@ -11192,7 +11282,7 @@ if (!((targetmd2->status.def_ele == ELE_HOLY) || (targetmd2->status.def_ele < 4)
 
 			// Throw Shuriken
 			if (foundtargetRA > -1) if (canskill(sd)) if ((pc_checkskill(sd, NJ_SYURIKEN) > 0)) if (rangeddist <= 9) {
-				shurikenchange(sd, targetRAmd);
+				if (shurikenchange(sd, targetRAmd)>0)
 				unit_skilluse_ifable(&sd->bl, foundtargetRA, NJ_SYURIKEN, pc_checkskill(sd, NJ_SYURIKEN));
 			}
 
@@ -11387,7 +11477,8 @@ if (!((targetmd2->status.def_ele == ELE_HOLY) || (targetmd2->status.def_ele < 4)
 
 			// Deadly Infection
 			if (canskill(sd))
-				if (pc_checkskill(sd, SC_DEADLYINFECT) > 0) {
+				if (pc_checkskill(sd, SC_DEADLYINFECT) > 0)
+				if (!sd->sc.data[SC__DEADLYINFECT]) {
 					if (
 						(sd->sc.data[SC_CURSE]) ||
 						(sd->sc.data[SC_SILENCE]) ||
@@ -11426,7 +11517,15 @@ if (!((targetmd2->status.def_ele == ELE_HOLY) || (targetmd2->status.def_ele < 4)
 				}
 			}
 
-			if (sd->class_ == MAPID_STAR_EMPEROR) {
+			if ((sd->class_ & MAPID_THIRDMASK) == MAPID_STAR_EMPEROR) {
+				// Star Emperor Advent
+				if (sd->sc.data[SC_UNIVERSESTANCE])
+				if (canskill(sd)) if ((pc_checkskill(sd, SJ_STAREMPEROR) > 0)) {
+					// At least 3 enemies in range (or 2 if weak to element)
+					if (map_foreachinrange(AOEPriority, bl, 2, BL_MOB, skillelem(sd, SJ_STAREMPEROR)) >= 6)
+						unit_skilluse_ifable(&sd->bl, SELF, SJ_STAREMPEROR, pc_checkskill(sd, SJ_STAREMPEROR));
+				}
+
 				// Solar Branch is for tanking
 				if (prefer = PREFERSUN)
 				if ((sd->sc.data[SC_UNIVERSESTANCE])
@@ -11434,7 +11533,8 @@ if (!((targetmd2->status.def_ele == ELE_HOLY) || (targetmd2->status.def_ele < 4)
 					// Solar kick if able
 					if (canskill(sd)) if ((pc_checkskill(sd, SJ_SOLARBURST) > 0))
 					if ((sd->sc.data[SC_COMBO] && sd->sc.data[SC_COMBO]->val1 == SJ_PROMINENCEKICK))
-						unit_skilluse_ifable(&sd->bl, foundtargetID, SJ_SOLARBURST, pc_checkskill(sd, SJ_SOLARBURST));
+						if (targetdistance<3)
+						unit_skilluse_ifable(&sd->bl, SELF, SJ_SOLARBURST, pc_checkskill(sd, SJ_SOLARBURST));
 					// Prominence Kick
 					if (canskill(sd)) if ((pc_checkskill(sd, SJ_PROMINENCEKICK) > 0))
 						if ((checksprate(sd, targetmd, 20))
@@ -11602,7 +11702,7 @@ if (!((targetmd2->status.def_ele == ELE_HOLY) || (targetmd2->status.def_ele < 4)
 			}
 
 			// Dark Claw skill
-			if (canskill(sd)) if (pc_checkskill(sd, GC_DARKCROW) > 0) if (sd->status.weapon == W_KATAR)
+			if (canskill(sd)) if (pc_checkskill(sd, GC_DARKCROW) > 0) 
 				if (elemallowed(targetmd, skillelem(sd, GC_DARKCROW))) {
 					// Use like other skills, but also always use if EDP enabled, that's not the time to conserve SP
 					if ((checksprate(sd, targetmd, 50)))
@@ -11623,7 +11723,7 @@ if (!((targetmd2->status.def_ele == ELE_HOLY) || (targetmd2->status.def_ele < 4)
 			// Venom Impress
 			// Use if enchant poison
 			if (canskill(sd)) if (pc_checkskill(sd, GC_VENOMIMPRESS) > 0)
-				if (!(sd->sc.data[AS_ENCHANTPOISON]))
+				if ((sd->sc.data[SC_ENCPOISON]))
 					if (!(targetmd->sc.data[SC_VENOMIMPRESS]))
 						if ((checksprate(sd, targetmd, 5)) || (sd->sc.data[SC_EDP])) {
 						unit_skilluse_ifable(&sd->bl, foundtargetID, GC_VENOMIMPRESS, pc_checkskill(sd, GC_VENOMIMPRESS));
@@ -11734,7 +11834,7 @@ if (!((targetmd2->status.def_ele == ELE_HOLY) || (targetmd2->status.def_ele < 4)
 			// *** Note I changed this to make the damage depend on missing HP more and it also costs 5 balls.
 			// Only use when wounded.
 			if (canskill(sd)) if (pc_checkskill(sd, SR_GATEOFHELL) > 0)
-					if (sd->spiritball >= 5) if (havepriest && havehealer)
+					if (sd->spiritball >= 5)
 						if (sd->battle_status.sp > sd->battle_status.max_sp*0.33)
 							if (sd->battle_status.hp < sd->battle_status.max_hp*0.3)
 							{
